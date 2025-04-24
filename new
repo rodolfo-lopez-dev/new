@@ -1,68 +1,59 @@
 
-# 1. SETUP
-sns.set_style("whitegrid")
-plt.rcParams['font.family'] = 'Arial'
+import seaborn as sns
+import matplotlib.pyplot as plt
 
-# 2. CYCLE TIME PLOT (WITH DOTS)
-plt.figure(figsize=(10, 6))
+# --- 1. SETUP ---
+sns.set_theme(style="whitegrid", font="Arial")
+plt.rcParams['grid.linewidth'] = 0.5
 
-# Create color palette
-colors = ["#4C72B0", "#DD8452", "#55A868"]  # Blue, Orange, Green
+# --- 2. VISUAL ELEMENTS ---
+# Define colors as simple names
+BLUE = "dodgerblue"
+GREEN = "limegreen"
+GOLD = "gold"
 
-# Boxplot
-sns.boxplot(data=df[['Backlog_to_First_InProgress', 
-                    'InProgress_to_Done', 
-                    'Backlog_to_Done']],
-            palette=colors,
-            width=0.6,
-            linewidth=1.5)
+# Define data columns
+columns = ['Backlog_to_First_InProgress', 'InProgress_to_Done', 'Backlog_to_Done']
+labels = ["Backlog → First Progress", "In Progress → Done", "Total Cycle"]
 
-# Individual dots (your requested feature)
-sns.stripplot(data=df[['Backlog_to_First_InProgress',
-                      'InProgress_to_Done',
-                      'Backlog_to_Done']],
-             color='black',
-             size=5,
-             alpha=0.4,
-             jitter=0.2)
+# --- 3. CREATE PLOT ---
+plt.figure(figsize=(10,6))
 
-# Annotations
-for i, col in enumerate(['Backlog_to_First_InProgress',
-                       'InProgress_to_Done',
-                       'Backlog_to_Done']):
+# Boxes with manual colors
+boxes = plt.boxplot(df[columns], 
+                   patch_artist=True,  # Enable coloring
+                   widths=0.5,
+                   medianprops={'color':'white', 'linewidth':2})
+
+# Apply colors
+for box, color in zip(boxes['boxes'], [BLUE, GREEN, GOLD]):
+    box.set_facecolor(color)
+
+# Dots (individual tasks)
+for i, col in enumerate(columns):
+    plt.scatter(x=[i+1]*len(df),  # X positions
+               y=df[col],         # Y values
+               color='black',
+               alpha=0.3,
+               s=20)  # Dot size
+
+# --- 4. ANNOTATIONS ---
+for i, col in enumerate(columns):
+    # Median (centered in box)
     median = df[col].median()
-    plt.text(i, median, f"Median: {median:.1f}d", 
-            ha='center', va='center', 
-            color='white', weight='bold',
-            bbox=dict(facecolor='#333333', alpha=0.8))
+    plt.text(i+1, median, f"Med: {median:.1f}d", 
+             ha='center', va='center',
+             color='white',
+             weight='bold')
+    
+    # Average (below box)
+    avg = df[col].mean()
+    plt.text(i+1, max(df[col])*0.95, f"Avg: {avg:.1f}d", 
+             ha='center', va='top',
+             color='black')
 
-plt.xticks([0, 1, 2], 
-           ["Backlog → First Progress", 
-            "In Progress → Done", 
-            "Total Cycle"])
-plt.title("Task Durations with Individual Tasks", pad=15)
+# --- 5. FINISHING ---
+plt.xticks([1,2,3], labels)
 plt.ylabel("Days")
-plt.show()
-
-# 3. WORKING HEATMAP EXAMPLE (with sample data)
-# Generate sample transition data if not defined
-transition_times = pd.DataFrame({
-    'Backlog': [np.nan, 2.1, 1.5, 3.0],
-    'First Progress': [2.1, np.nan, 4.0, 2.5],
-    'In Progress': [1.5, 4.0, np.nan, 1.8],
-    'Done': [3.0, 2.5, 1.8, np.nan]
-}, index=['Backlog', 'First Progress', 'In Progress', 'Done'])
-
-plt.figure(figsize=(8, 6))
-sns.heatmap(transition_times,
-           annot=True,
-           fmt=".1f",
-           cmap="YlOrRd",
-           linewidths=0.5,
-           linecolor='white')
-
-plt.title("Stage Transition Times (Sample Data)", pad=15)
-plt.xlabel("To Stage →")
-plt.ylabel("← From Stage")
-plt.xticks(rotation=45)
+plt.title("Workflow Durations", pad=15)
 plt.show()
