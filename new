@@ -1,56 +1,68 @@
 
-
-import matplotlib.pyplot as plt
-import seaborn as sns
-
-# 1. SETUP (Run this first)
+# 1. SETUP
 sns.set_style("whitegrid")
 plt.rcParams['font.family'] = 'Arial'
 
-# 2. CYCLE TIME PLOT (Simplified but professional)
-plt.figure(figsize=(10, 5))
+# 2. CYCLE TIME PLOT (WITH DOTS)
+plt.figure(figsize=(10, 6))
 
-# Create color-coded boxplot
+# Create color palette
+colors = ["#4C72B0", "#DD8452", "#55A868"]  # Blue, Orange, Green
+
+# Boxplot
 sns.boxplot(data=df[['Backlog_to_First_InProgress', 
                     'InProgress_to_Done', 
                     'Backlog_to_Done']],
-            palette=["#4C72B0", "#DD8452", "#55A868"])
+            palette=colors,
+            width=0.6,
+            linewidth=1.5)
 
-# Add median annotations
-for i, col in enumerate(['Backlog_to_First_InProgress', 
-                       'InProgress_to_Done', 
+# Individual dots (your requested feature)
+sns.stripplot(data=df[['Backlog_to_First_InProgress',
+                      'InProgress_to_Done',
+                      'Backlog_to_Done']],
+             color='black',
+             size=5,
+             alpha=0.4,
+             jitter=0.2)
+
+# Annotations
+for i, col in enumerate(['Backlog_to_First_InProgress',
+                       'InProgress_to_Done',
                        'Backlog_to_Done']):
     median = df[col].median()
-    plt.text(i, median, f"Median: {median:.1f} days", 
+    plt.text(i, median, f"Median: {median:.1f}d", 
             ha='center', va='center', 
             color='white', weight='bold',
             bbox=dict(facecolor='#333333', alpha=0.8))
 
-# Clear labels
 plt.xticks([0, 1, 2], 
            ["Backlog → First Progress", 
             "In Progress → Done", 
-            "Total Cycle Time"])
-plt.title("Task Duration Analysis", pad=15, weight='bold')
+            "Total Cycle"])
+plt.title("Task Durations with Individual Tasks", pad=15)
 plt.ylabel("Days")
-
-plt.tight_layout()
 plt.show()
 
-# 3. TRANSITION HEATMAP (Essential version)
-plt.figure(figsize=(9, 5))
+# 3. WORKING HEATMAP EXAMPLE (with sample data)
+# Generate sample transition data if not defined
+transition_times = pd.DataFrame({
+    'Backlog': [np.nan, 2.1, 1.5, 3.0],
+    'First Progress': [2.1, np.nan, 4.0, 2.5],
+    'In Progress': [1.5, 4.0, np.nan, 1.8],
+    'Done': [3.0, 2.5, 1.8, np.nan]
+}, index=['Backlog', 'First Progress', 'In Progress', 'Done'])
 
+plt.figure(figsize=(8, 6))
 sns.heatmap(transition_times,
            annot=True,
            fmt=".1f",
-           cmap="YlOrBr",
+           cmap="YlOrRd",
            linewidths=0.5,
            linecolor='white')
 
-plt.title("Average Time Between Stages", pad=15, weight='bold')
-plt.xlabel("Next Stage →")
-plt.ylabel("← Current Stage")
-plt.xticks(rotation=45, ha='right')
-
-plt.tight_layout()
+plt.title("Stage Transition Times (Sample Data)", pad=15)
+plt.xlabel("To Stage →")
+plt.ylabel("← From Stage")
+plt.xticks(rotation=45)
 plt.show()
