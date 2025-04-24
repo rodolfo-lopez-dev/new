@@ -1,68 +1,58 @@
 import pandas as pd
-import numpy as np
 import matplotlib.pyplot as plt
+import seaborn as sns
 
-# --- 1. Define Thresholds and Labels ---
-thresholds = [0, 8, 15, 22, np.inf]
-threshold_labels = ['<=7 days', '8-14 days', '15-21 days', '22+ days']
-colors = ['#4C78A8', '#54A24B', '#EECA3B', '#F58518']  # Colorblind-safe
-
-# --- 2. Calculate Cycle Time and Group ---
-df['cycle_time'] = (df['Done'] - df['First_In_Progress']).dt.days
-df['Cycle_Group'] = pd.cut(
-    df['cycle_time'], 
-    bins=thresholds, 
-    labels=threshold_labels, 
-    right=False  # Ensures 7 days falls into '<=7' (not '8-14')
+# =============================================
+# 1. CYCLE TIME DISTRIBUTION (Boxplot + Swarm)
+# =============================================
+plt.figure(figsize=(10, 6))
+sns.boxplot(
+    data=df[['Backlog_to_First_InProgress', 'InProgress_to_Done', 'Backlog_to_Done']],
+    palette=['#4C78A8', '#F58518', '#54A24B'],
+    width=0.4
 )
+sns.swarmplot(
+    data=df[['Backlog_to_First_InProgress', 'InProgress_to_Done', 'Backlog_to_Done']],
+    color='black',
+    alpha=0.5,
+    size=4
+)
+plt.title("Cycle Time Distribution (Days)", pad=15)
+plt.ylabel("Days")
+plt.xticks(
+    [0, 1, 2], 
+    ["Backlog → First Progress", "Active Work → Done", "Total Cycle Time"]
+)
+plt.grid(axis='y', alpha=0.2)
+sns.despine()
+plt.tight_layout()
+plt.show()
 
-# --- 3. Aggregate by Month ---
-percentages = []
-month_labels = []
+# =============================================
+# 2. STAGE TRANSITION HEATMAP 
+# =============================================
+# Calculate median time between stages
+stages = [
+    'Backlog', 'Ready for Development', 'In Development', 
+    'Ready for Test', 'In Test', 'Ready for Deployment', 'Done'
+]
+transition_times = pd.DataFrame(index=stages[:-1], columns=stages[1:])
 
-for label, (start, end) in month_windows.items():
-    # Filter tasks first worked on in this month
-    mask = df['First_In_Progress'].between(start, end)
-    month_df = df[mask]
-    
-    # Calculate % distribution of cycle time groups
-    counts = month_df['Cycle_Group'].value_counts(normalize=True)
-    counts = counts.reindex(threshold_labels, fill_value=0) * 100  # Ensure all groups appear
-    percentages.append(counts)
-    month_labels.append(label)
+for i, start_stage in enumerate(stages[:-1]):
+    for j, end_stage in enumerate(stages[i+1:], i+1):
+        col_name = f"{start_stage}_to_{end_stage}"
+        if col_name in df.columns:
+            transition_times.loc[start_stage, end_stage] = df[col_name].median()
 
-percentages = pd.DataFrame(percentages, index=month_labels)
-
-# --- 4. Plot Stacked Bar Chart ---
-plt.figure(figsize=(12, 6))
-bottom = np.zeros(len(percentages))
-
-for i, label in enumerate(threshold_labels):
-    vals = percentages[label].values
-    plt.bar(
-        percentages.index, vals, bottom=bottom,
-        color=colors[i], label=label, 
-        edgecolor='white', linewidth=0.5
-    )
-    # Add labels for segments >5%
-    for idx, pct in enumerate(vals):
-        if pct >= 5:
-            y_pos = bottom[idx] + pct / 2
-            plt.text(
-                idx, y_pos, f'{pct:.0f}%', 
-                ha='center', va='center',
-                fontsize=9,
-                fontweight='bold',
-                color='white' if (pct > 15 or y_pos > 50) else 'black'
-            )
-    bottom += vals
-
-# --- 5. Customize Plot ---
-plt.title('Task Cycle Time Distribution by Month', fontsize=14, pad=20)
-plt.ylabel('Percentage of Tasks')
-plt.xlabel('Month')
-plt.ylim(0, 100)
-plt.grid(axis='y', linestyle=':', alpha=0.4)
-plt.legend(title='Cycle Time', bbox_to_anchor=(1.05, 1))
+plt.figure(figsize=(10, 6))
+sns.heatmap(
+    transition_times.astype(float), 
+    annot=True, fmt=".1f",
+    cmap="YlOrRd", 
+    cbar_kws={'label': 'Median Days'}
+)
+plt.title("Median Time Between Stages", pad=15)
+plt.xlabel("To Stage")
+plt.ylabel("From Stage")
 plt.tight_layout()
 plt.show()
