@@ -1,58 +1,96 @@
-import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 
+# Set professional style
+sns.set_style("whitegrid", {'grid.linestyle': ':'})
+plt.rcParams['font.family'] = 'DejaVu Sans'  # Clean, readable font
+
 # =============================================
-# 1. CYCLE TIME DISTRIBUTION (Boxplot + Swarm)
+# 1. CYCLE TIME DISTRIBUTION (Boxplot + Stripplot)
 # =============================================
-plt.figure(figsize=(10, 6))
-sns.boxplot(
+plt.figure(figsize=(12, 6))
+
+# Natural color palette (sky, earth, vegetation)
+phase_colors = {
+    "Planning": "#5D9BEC",  # Sky blue for planning
+    "Execution": "#E07A5F",  # Clay red for active work
+    "Total": "#81B29A"       # Sage green for completion
+}
+
+# Plot boxplot
+box = sns.boxplot(
     data=df[['Backlog_to_First_InProgress', 'InProgress_to_Done', 'Backlog_to_Done']],
-    palette=['#4C78A8', '#F58518', '#54A24B'],
-    width=0.4
+    palette=[phase_colors["Planning"], phase_colors["Execution"], phase_colors["Total"]],
+    width=0.6,
+    linewidth=1.8,
+    fliersize=0  # Hide default outliers
 )
-sns.swarmplot(
+
+# Plot stripplot (better distribution than swarmplot)
+strip = sns.stripplot(
     data=df[['Backlog_to_First_InProgress', 'InProgress_to_Done', 'Backlog_to_Done']],
-    color='black',
-    alpha=0.5,
-    size=4
+    palette=[phase_colors["Planning"], phase_colors["Execution"], phase_colors["Total"]],
+    edgecolor="black",
+    linewidth=0.5,
+    size=6,
+    jitter=0.2,
+    alpha=0.7
 )
-plt.title("Cycle Time Distribution (Days)", pad=15)
-plt.ylabel("Days")
-plt.xticks(
-    [0, 1, 2], 
-    ["Backlog → First Progress", "Active Work → Done", "Total Cycle Time"]
-)
-plt.grid(axis='y', alpha=0.2)
-sns.despine()
+
+# Customize appearance
+plt.title("Workflow Phase Durations", pad=20, fontsize=14, fontweight='semibold')
+plt.ylabel("Days", fontsize=12, labelpad=10)
+plt.xlabel("Workflow Phase", fontsize=12, labelpad=15)
+
+# Human-readable labels
+phase_names = [
+    "Planning\n(Backlog → First Action)",
+    "Execution\n(Active Work → Done)", 
+    "Total Cycle\n(Start to Finish)"
+]
+plt.xticks([0, 1, 2], phase_names, fontsize=11)
+
+# Add legend
+from matplotlib.patches import Patch
+legend_elements = [
+    Patch(facecolor=phase_colors["Planning"], label='Planning Phase'),
+    Patch(facecolor=phase_colors["Execution"], label='Execution Phase'),
+    Patch(facecolor=phase_colors["Total"], label='Total Duration')
+]
+plt.legend(handles=legend_elements, loc='upper right', frameon=True)
+
 plt.tight_layout()
 plt.show()
 
 # =============================================
-# 2. STAGE TRANSITION HEATMAP 
+# 2. STAGE TRANSITION HEATMAP (Nature-Inspired)
 # =============================================
-# Calculate median time between stages
-stages = [
-    'Backlog', 'Ready for Development', 'In Development', 
-    'Ready for Test', 'In Test', 'Ready for Deployment', 'Done'
-]
-transition_times = pd.DataFrame(index=stages[:-1], columns=stages[1:])
+plt.figure(figsize=(11, 7))
 
-for i, start_stage in enumerate(stages[:-1]):
-    for j, end_stage in enumerate(stages[i+1:], i+1):
-        col_name = f"{start_stage}_to_{end_stage}"
-        if col_name in df.columns:
-            transition_times.loc[start_stage, end_stage] = df[col_name].median()
-
-plt.figure(figsize=(10, 6))
-sns.heatmap(
-    transition_times.astype(float), 
-    annot=True, fmt=".1f",
-    cmap="YlOrRd", 
-    cbar_kws={'label': 'Median Days'}
+# Earth-toned colormap (light sand to dark clay)
+heat = sns.heatmap(
+    transition_times.astype(float),
+    annot=True,
+    fmt=".1f",
+    cmap=sns.light_palette("#BC8034", as_cmap=True),  # Base clay color
+    cbar_kws={'label': 'Days Between Stages', 'orientation': 'horizontal'},
+    linewidths=0.5,
+    linecolor='white',
+    annot_kws={"fontsize":9, "color":"black"}
 )
-plt.title("Median Time Between Stages", pad=15)
-plt.xlabel("To Stage")
-plt.ylabel("From Stage")
+
+# Professional labels
+plt.title("Stage Transition Times", pad=20, fontsize=14, fontweight='semibold')
+plt.xlabel("Next Stage →", fontsize=12, labelpad=10)
+plt.ylabel("← Current Stage", fontsize=12, labelpad=10)
+plt.xticks(rotation=45, ha='right', fontsize=10)
+plt.yticks(rotation=0, fontsize=10)
+
+# Move colorbar below
+cbar = heat.collections[0].colorbar
+cbar.ax.set_position([0.25, -0.15, 0.5, 0.05])
+cbar.ax.tick_params(labelsize=9)
+cbar.outline.set_edgecolor('none')
+
 plt.tight_layout()
 plt.show()
