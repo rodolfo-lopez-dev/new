@@ -1,96 +1,80 @@
-import matplotlib.pyplot as plt
-import seaborn as sns
 
-# Set professional style
+
+# Professional styling
 sns.set_style("whitegrid", {'grid.linestyle': ':'})
-plt.rcParams['font.family'] = 'DejaVu Sans'  # Clean, readable font
+plt.rcParams.update({
+    'font.family': 'Arial',
+    'axes.titlesize': 14,
+    'axes.titleweight': 'bold'
+})
 
-# =============================================
-# 1. CYCLE TIME DISTRIBUTION (Boxplot + Stripplot)
-# =============================================
-plt.figure(figsize=(12, 6))
+# ---------------------------
+# 2. CYCLE TIME PLOT (With Clear Labels)
+# ---------------------------
+def plot_cycle_times(df):
+    plt.figure(figsize=(10, 6))
+    
+    # Create plot with your exact terminology
+    ax = sns.boxplot(data=df[['Backlog_to_First_InProgress', 
+                            'InProgress_to_Done', 
+                            'Backlog_to_Done']],
+                    palette=["#1f77b4", "#ff7f0e", "#2ca02c"])
+    
+    # Add detailed annotations
+    for i, col in enumerate(['Backlog_to_First_InProgress', 
+                           'InProgress_to_Done', 
+                           'Backlog_to_Done']):
+        median = df[col].median()
+        mean = df[col].mean()
+        
+        # Main annotation
+        ax.text(i, median, 
+                f"Median: {median:.1f} days\nMean: {mean:.1f} days", 
+                ha='center', va='center', 
+                color='white', weight='bold',
+                bbox=dict(facecolor='#333333', alpha=0.9, pad=4))
+    
+    # Label with your exact terms
+    ax.set_xticklabels([
+        "Backlog → First In Progress", 
+        "In Progress → Done", 
+        "Total (Backlog → Done)"
+    ])
+    
+    ax.set_title("Task Cycle Time Breakdown", pad=20)
+    ax.set_ylabel("Duration (Days)")
+    
+    plt.tight_layout()
+    plt.show()
 
-# Natural color palette (sky, earth, vegetation)
-phase_colors = {
-    "Planning": "#5D9BEC",  # Sky blue for planning
-    "Execution": "#E07A5F",  # Clay red for active work
-    "Total": "#81B29A"       # Sage green for completion
-}
+# ---------------------------
+# 3. TRANSITION HEATMAP (With Stage Names)
+# ---------------------------
+def plot_transitions(transition_data):
+    plt.figure(figsize=(10, 6))
+    
+    ax = sns.heatmap(transition_data, 
+                    annot=True, fmt=".1f",
+                    cmap="YlGnBu",
+                    annot_kws={"fontsize":10, "fontweight":"bold"},
+                    cbar_kws={'label': 'Average Days Between Stages'})
+    
+    # Highlight thresholds
+    for text in ax.texts:
+        days = float(text.get_text())
+        if days > 7:
+            text.set_color('red')
+            text.set_bbox(dict(facecolor='white', alpha=0.8, pad=0.2))
+    
+    ax.set_title("Average Stage Transition Times", pad=20)
+    ax.set_xlabel("Next Stage →")
+    ax.set_ylabel("← Current Stage")
+    
+    plt.tight_layout()
+    plt.show()
 
-# Plot boxplot
-box = sns.boxplot(
-    data=df[['Backlog_to_First_InProgress', 'InProgress_to_Done', 'Backlog_to_Done']],
-    palette=[phase_colors["Planning"], phase_colors["Execution"], phase_colors["Total"]],
-    width=0.6,
-    linewidth=1.8,
-    fliersize=0  # Hide default outliers
-)
-
-# Plot stripplot (better distribution than swarmplot)
-strip = sns.stripplot(
-    data=df[['Backlog_to_First_InProgress', 'InProgress_to_Done', 'Backlog_to_Done']],
-    palette=[phase_colors["Planning"], phase_colors["Execution"], phase_colors["Total"]],
-    edgecolor="black",
-    linewidth=0.5,
-    size=6,
-    jitter=0.2,
-    alpha=0.7
-)
-
-# Customize appearance
-plt.title("Workflow Phase Durations", pad=20, fontsize=14, fontweight='semibold')
-plt.ylabel("Days", fontsize=12, labelpad=10)
-plt.xlabel("Workflow Phase", fontsize=12, labelpad=15)
-
-# Human-readable labels
-phase_names = [
-    "Planning\n(Backlog → First Action)",
-    "Execution\n(Active Work → Done)", 
-    "Total Cycle\n(Start to Finish)"
-]
-plt.xticks([0, 1, 2], phase_names, fontsize=11)
-
-# Add legend
-from matplotlib.patches import Patch
-legend_elements = [
-    Patch(facecolor=phase_colors["Planning"], label='Planning Phase'),
-    Patch(facecolor=phase_colors["Execution"], label='Execution Phase'),
-    Patch(facecolor=phase_colors["Total"], label='Total Duration')
-]
-plt.legend(handles=legend_elements, loc='upper right', frameon=True)
-
-plt.tight_layout()
-plt.show()
-
-# =============================================
-# 2. STAGE TRANSITION HEATMAP (Nature-Inspired)
-# =============================================
-plt.figure(figsize=(11, 7))
-
-# Earth-toned colormap (light sand to dark clay)
-heat = sns.heatmap(
-    transition_times.astype(float),
-    annot=True,
-    fmt=".1f",
-    cmap=sns.light_palette("#BC8034", as_cmap=True),  # Base clay color
-    cbar_kws={'label': 'Days Between Stages', 'orientation': 'horizontal'},
-    linewidths=0.5,
-    linecolor='white',
-    annot_kws={"fontsize":9, "color":"black"}
-)
-
-# Professional labels
-plt.title("Stage Transition Times", pad=20, fontsize=14, fontweight='semibold')
-plt.xlabel("Next Stage →", fontsize=12, labelpad=10)
-plt.ylabel("← Current Stage", fontsize=12, labelpad=10)
-plt.xticks(rotation=45, ha='right', fontsize=10)
-plt.yticks(rotation=0, fontsize=10)
-
-# Move colorbar below
-cbar = heat.collections[0].colorbar
-cbar.ax.set_position([0.25, -0.15, 0.5, 0.05])
-cbar.ax.tick_params(labelsize=9)
-cbar.outline.set_edgecolor('none')
-
-plt.tight_layout()
-plt.show()
+# ---------------------------
+# 4. EXAMPLE USAGE
+# ---------------------------
+# plot_cycle_times(your_dataframe)
+# plot_transitions(your_transition_matrix)
