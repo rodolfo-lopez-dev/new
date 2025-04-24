@@ -1,80 +1,56 @@
 
 
-# Professional styling
-sns.set_style("whitegrid", {'grid.linestyle': ':'})
-plt.rcParams.update({
-    'font.family': 'Arial',
-    'axes.titlesize': 14,
-    'axes.titleweight': 'bold'
-})
+import matplotlib.pyplot as plt
+import seaborn as sns
 
-# ---------------------------
-# 2. CYCLE TIME PLOT (With Clear Labels)
-# ---------------------------
-def plot_cycle_times(df):
-    plt.figure(figsize=(10, 6))
-    
-    # Create plot with your exact terminology
-    ax = sns.boxplot(data=df[['Backlog_to_First_InProgress', 
-                            'InProgress_to_Done', 
-                            'Backlog_to_Done']],
-                    palette=["#1f77b4", "#ff7f0e", "#2ca02c"])
-    
-    # Add detailed annotations
-    for i, col in enumerate(['Backlog_to_First_InProgress', 
-                           'InProgress_to_Done', 
-                           'Backlog_to_Done']):
-        median = df[col].median()
-        mean = df[col].mean()
-        
-        # Main annotation
-        ax.text(i, median, 
-                f"Median: {median:.1f} days\nMean: {mean:.1f} days", 
-                ha='center', va='center', 
-                color='white', weight='bold',
-                bbox=dict(facecolor='#333333', alpha=0.9, pad=4))
-    
-    # Label with your exact terms
-    ax.set_xticklabels([
-        "Backlog → First In Progress", 
-        "In Progress → Done", 
-        "Total (Backlog → Done)"
-    ])
-    
-    ax.set_title("Task Cycle Time Breakdown", pad=20)
-    ax.set_ylabel("Duration (Days)")
-    
-    plt.tight_layout()
-    plt.show()
+# 1. SETUP (Run this first)
+sns.set_style("whitegrid")
+plt.rcParams['font.family'] = 'Arial'
 
-# ---------------------------
-# 3. TRANSITION HEATMAP (With Stage Names)
-# ---------------------------
-def plot_transitions(transition_data):
-    plt.figure(figsize=(10, 6))
-    
-    ax = sns.heatmap(transition_data, 
-                    annot=True, fmt=".1f",
-                    cmap="YlGnBu",
-                    annot_kws={"fontsize":10, "fontweight":"bold"},
-                    cbar_kws={'label': 'Average Days Between Stages'})
-    
-    # Highlight thresholds
-    for text in ax.texts:
-        days = float(text.get_text())
-        if days > 7:
-            text.set_color('red')
-            text.set_bbox(dict(facecolor='white', alpha=0.8, pad=0.2))
-    
-    ax.set_title("Average Stage Transition Times", pad=20)
-    ax.set_xlabel("Next Stage →")
-    ax.set_ylabel("← Current Stage")
-    
-    plt.tight_layout()
-    plt.show()
+# 2. CYCLE TIME PLOT (Simplified but professional)
+plt.figure(figsize=(10, 5))
 
-# ---------------------------
-# 4. EXAMPLE USAGE
-# ---------------------------
-# plot_cycle_times(your_dataframe)
-# plot_transitions(your_transition_matrix)
+# Create color-coded boxplot
+sns.boxplot(data=df[['Backlog_to_First_InProgress', 
+                    'InProgress_to_Done', 
+                    'Backlog_to_Done']],
+            palette=["#4C72B0", "#DD8452", "#55A868"])
+
+# Add median annotations
+for i, col in enumerate(['Backlog_to_First_InProgress', 
+                       'InProgress_to_Done', 
+                       'Backlog_to_Done']):
+    median = df[col].median()
+    plt.text(i, median, f"Median: {median:.1f} days", 
+            ha='center', va='center', 
+            color='white', weight='bold',
+            bbox=dict(facecolor='#333333', alpha=0.8))
+
+# Clear labels
+plt.xticks([0, 1, 2], 
+           ["Backlog → First Progress", 
+            "In Progress → Done", 
+            "Total Cycle Time"])
+plt.title("Task Duration Analysis", pad=15, weight='bold')
+plt.ylabel("Days")
+
+plt.tight_layout()
+plt.show()
+
+# 3. TRANSITION HEATMAP (Essential version)
+plt.figure(figsize=(9, 5))
+
+sns.heatmap(transition_times,
+           annot=True,
+           fmt=".1f",
+           cmap="YlOrBr",
+           linewidths=0.5,
+           linecolor='white')
+
+plt.title("Average Time Between Stages", pad=15, weight='bold')
+plt.xlabel("Next Stage →")
+plt.ylabel("← Current Stage")
+plt.xticks(rotation=45, ha='right')
+
+plt.tight_layout()
+plt.show()
