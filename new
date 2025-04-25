@@ -1,43 +1,29 @@
 
-df['Week_Start'] = df['First_In_Progress'].dt.to_period('W').apply(lambda r: r.start_time)
-weekly_durations = (
-    df.groupby('Week_Start')[duration_columns]
-      .median()
-      .reset_index()
-)
-import matplotlib.pyplot as plt
+plt.figure(figsize=(10, 7))
+boxes = sns.boxplot(data=df[columns], width=0.6, linewidth=1.5, flierprops={"marker": "x", "markersize": 5})
+for i, box in enumerate(boxes.artists):
+    box.set_facecolor(colors[i])
+    box.set_alpha(0.3)
+sns.stripplot(data=df[columns], palette=colors, size=6, alpha=0.5, jitter=0.15, linewidth=0.5, edgecolor='white')
 
-plt.figure(figsize=(14, 6))
-for col in duration_columns:
-    plt.plot(weekly_durations['Week_Start'], 
-             weekly_durations[col], 
-             marker='o', 
-             label=col.replace('_to_', ' → ').replace('_', ' '))
+for i, col in enumerate(columns):
+    median_val = df[col].median()
+    plt.text(i, median_val, f"Median: {median_val:.1f}d", ha='center', va='center', fontsize=10, color='white', weight='bold', bbox=dict(facecolor=colors[i], edgecolor='none', boxstyle='round,pad=0.3'))
 
-plt.title("Weekly Median Duration per Stage")
-plt.xlabel("Week")
+
+plt.xticks(range(len(labels)), labels)
 plt.ylabel("Duration (Days)")
-plt.xticks(rotation=45)
-plt.grid(True)
-plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+plt.title("Workflow Durations (Medians Highlighted)", pad=15)
+
+# Create legend entries for averages using Patches
+legend_handles = []
+for i, col in enumerate(columns):
+    avg = df[col].mean()
+    label_text = f"Avg ({labels[i]}): {avg:.1f}d"
+    # Create a proxy artist (a colored patch) for the legend
+    handle = mpatches.Patch(color=colors[i], label=label_text)
+    legend_handles.append(handle)
+
+plt.legend(handles=legend_handles, title="Averages", loc='upper right', fontsize=9)
 plt.tight_layout()
 plt.show()
-
-
-timestamp_cols = [col for col in df.columns if pd.api.types.is_datetime64_any_dtype(df[col])]
-from collections import Counter
-
-transition_counter = Counter()
-
-for _, row in df.iterrows():
-    stages = [(col, row[col]) for col in timestamp_cols if pd.notna(row[col])]
-    stages = sorted(stages, key=lambda x: x[1])  # sort by timestamp
-    
-    for i in range(len(stages) - 1):
-        from_stage = stages[i][0]
-        to_stage = stages[i + 1][0]
-        transition_counter[(from_stage, to_stage)] += 1
-transition_df = pd.DataFrame([
-    {'From': k[0], 'To': k[1], 'Count': v}
-    for k, v in transition_counter.items()
-]).sort_values(by='Count', ascending=False).reset_index(drop=True)
