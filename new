@@ -1,29 +1,22 @@
+from collections import defaultdict
 
-plt.figure(figsize=(10, 7))
-boxes = sns.boxplot(data=df[columns], width=0.6, linewidth=1.5, flierprops={"marker": "x", "markersize": 5})
-for i, box in enumerate(boxes.artists):
-    box.set_facecolor(colors[i])
-    box.set_alpha(0.3)
-sns.stripplot(data=df[columns], palette=colors, size=6, alpha=0.5, jitter=0.15, linewidth=0.5, edgecolor='white')
+transition_duration_dict = defaultdict(list)
 
-for i, col in enumerate(columns):
-    median_val = df[col].median()
-    plt.text(i, median_val, f"Median: {median_val:.1f}d", ha='center', va='center', fontsize=10, color='white', weight='bold', bbox=dict(facecolor=colors[i], edgecolor='none', boxstyle='round,pad=0.3'))
+# Loop through each task (row)
+for _, row in df_tracked.iterrows():
+    # Get all valid timestamps for this task
+    stages = [(col, row[col]) for col in timestamp_columns if pd.notna(row[col])]
+    stages = sorted(stages, key=lambda x: x[1])  # Sort by actual time
 
+    # Calculate only transitions
+    for i in range(len(stages) - 1):
+        from_stage, start_time = stages[i]
+        to_stage, end_time = stages[i + 1]
 
-plt.xticks(range(len(labels)), labels)
-plt.ylabel("Duration (Days)")
-plt.title("Workflow Durations (Medians Highlighted)", pad=15)
+        duration = (end_time - start_time).total_seconds() / 86400  # Convert seconds to days
+        if duration >= 0:
+            transition_name = f"{from_stage} to {to_stage}"
+            transition_duration_dict[transition_name].append(round(duration, 2))
 
-# Create legend entries for averages using Patches
-legend_handles = []
-for i, col in enumerate(columns):
-    avg = df[col].mean()
-    label_text = f"Avg ({labels[i]}): {avg:.1f}d"
-    # Create a proxy artist (a colored patch) for the legend
-    handle = mpatches.Patch(color=colors[i], label=label_text)
-    legend_handles.append(handle)
-
-plt.legend(handles=legend_handles, title="Averages", loc='upper right', fontsize=9)
-plt.tight_layout()
-plt.show()
+for transition, durations in transition_duration_dict.items():
+    df_tracked[transition] = pd.Series(durations)
