@@ -1,68 +1,56 @@
 
 import seaborn as sns
 import matplotlib.pyplot as plt
-import numpy as np
 
 # --- 1. SETUP ---
 sns.set_theme(style="whitegrid", font="Arial")
-plt.rcParams['grid.linewidth'] = 0.5
+plt.rcParams['grid.linewidth'] = 0.3
 
-# --- 2. SAFE DATA PREP ---
-# Define columns and labels
+# --- 2. DATA & COLORS ---
 columns = ['Backlog_to_First_InProgress', 'InProgress_to_Done', 'Backlog_to_Done']
 labels = ["Backlog → First Progress", "In Progress → Done", "Total Cycle"]
+colors = ['dodgerblue', 'limegreen', 'gold']  # Simple color names
 
-# Filter out NaN/infinite values
-clean_data = [df[col].dropna().replace([np.inf, -np.inf], np.nan).dropna().values 
-              for col in columns]
+# --- 3. PLOT ---
+plt.figure(figsize=(10, 6))
 
-# --- 3. CREATE PLOT ---
-plt.figure(figsize=(10,6))
+# Boxplot (transparent boxes)
+boxes = sns.boxplot(data=df[columns],
+                   width=0.6,
+                   linewidth=1.5,
+                   flierprops={"marker": "x", "markersize": 5})  # Mark outliers
 
-# Boxplot with manual colors
-boxes = plt.boxplot(clean_data, 
-                   patch_artist=True,
-                   widths=0.5,
-                   medianprops={'color':'white', 'linewidth':2})
+# Color boxes manually
+for i, box in enumerate(boxes.artists):
+    box.set_facecolor(colors[i])
+    box.set_alpha(0.3)  # Translucent boxes
 
-# Apply colors
-color_map = ['dodgerblue', 'limegreen', 'gold']
-for box, color in zip(boxes['boxes'], color_map):
-    box.set_facecolor(color)
+# Individual dots
+sns.stripplot(data=df[columns],
+             palette=colors,
+             size=6,
+             alpha=0.5,
+             jitter=0.15,
+             linewidth=0.5,
+             edgecolor='white')
 
-# Dots (with jitter)
-for i, col_data in enumerate(clean_data):
-    x_pos = np.random.normal(i+1, 0.1, size=len(col_data))  # Jitter effect
-    plt.scatter(x=x_pos,
-               y=col_data,
-               color='black',
-               alpha=0.4,
-               s=30,  # Dot size
-               edgecolor='white',
-               linewidth=0.5)
+# --- 4. AVERAGE ANNOTATIONS ---
+for i, col in enumerate(columns):
+    avg = df[col].mean()
+    
+    # Bold average label
+    plt.text(i, avg, f"Avg: {avg:.1f}d", 
+            ha='center', va='center',
+            fontsize=10,
+            color='white',
+            weight='bold',
+            bbox=dict(facecolor=colors[i], 
+                     edgecolor='none', 
+                     boxstyle='round,pad=0.3'))
 
-# --- 4. ANNOTATIONS ---
-for i, col_data in enumerate(clean_data):
-    if len(col_data) > 0:  # Only annotate if data exists
-        median = np.median(col_data)
-        avg = np.mean(col_data)
-        
-        # Median annotation
-        plt.text(i+1, median, f"Med: {median:.1f}d", 
-                ha='center', va='center',
-                color='white',
-                weight='bold',
-                bbox=dict(facecolor='#333333', alpha=0.9, pad=2))
-        
-        # Average annotation
-        plt.text(i+1, np.max(col_data)*0.95, f"Avg: {avg:.1f}d", 
-                ha='center', va='top',
-                color='black',
-                bbox=dict(facecolor='white', alpha=0.8, pad=1))
-
-# --- 5. FINAL TOUCHES ---
-plt.xticks([1, 2, 3], labels)
+# --- 5. FORMATTING ---
+plt.xticks(range(len(labels)), labels)
 plt.ylabel("Duration (Days)")
-plt.title("Workflow Phase Durations", pad=15)
+plt.title("Workflow Durations (Averages Highlighted)", pad=15)
 plt.tight_layout()
 plt.show()
