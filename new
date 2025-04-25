@@ -1,46 +1,43 @@
 
-import pandas as pd
-import seaborn as sns
+df['Week_Start'] = df['First_In_Progress'].dt.to_period('W').apply(lambda r: r.start_time)
+weekly_durations = (
+    df.groupby('Week_Start')[duration_columns]
+      .median()
+      .reset_index()
+)
 import matplotlib.pyplot as plt
 
-# 1. AUTO-DETECT TRANSITION COLUMNS
-def extract_transitions(df):
-    """Find all [Stage1]_to_[Stage2] columns automatically"""
-    transitions = [col for col in df.columns if '_to_' in col]
-    
-    # Get unique stages from column names
-    all_stages = set()
-    for col in transitions:
-        from_stage, to_stage = col.split('_to_')
-        all_stages.update([from_stage, to_stage])
-    all_stages = sorted(all_stages)
-    
-    # Build transition matrix
-    transition_matrix = pd.DataFrame(index=all_stages, columns=all_stages)
-    for col in transitions:
-        from_stage, to_stage = col.split('_to_')
-        transition_matrix.loc[from_stage, to_stage] = df[col].median()
-    
-    return transition_matrix
+plt.figure(figsize=(14, 6))
+for col in duration_columns:
+    plt.plot(weekly_durations['Week_Start'], 
+             weekly_durations[col], 
+             marker='o', 
+             label=col.replace('_to_', ' → ').replace('_', ' '))
 
-# 2. GENERATE HEATMAP
-transition_data = extract_transitions(df)
-
-plt.figure(figsize=(10, 8))
-sns.heatmap(
-    transition_data.astype(float),
-    annot=True,
-    fmt=".1f",
-    cmap="YlOrRd",
-    linewidths=0.5,
-    linecolor='white',
-    mask=transition_data.isna()  # Hide empty cells
-)
-
-plt.title("Workflow Transition Times (Auto-Extracted)", pad=20)
-plt.xlabel("To Stage →", labelpad=10)
-plt.ylabel("← From Stage", labelpad=10)
-plt.xticks(rotation=45, ha='right')
-plt.yticks(rotation=0)
+plt.title("Weekly Median Duration per Stage")
+plt.xlabel("Week")
+plt.ylabel("Duration (Days)")
+plt.xticks(rotation=45)
+plt.grid(True)
+plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
 plt.tight_layout()
 plt.show()
+
+
+timestamp_cols = [col for col in df.columns if pd.api.types.is_datetime64_any_dtype(df[col])]
+from collections import Counter
+
+transition_counter = Counter()
+
+for _, row in df.iterrows():
+    stages = [(col, row[col]) for col in timestamp_cols if pd.notna(row[col])]
+    stages = sorted(stages, key=lambda x: x[1])  # sort by timestamp
+    
+    for i in range(len(stages) - 1):
+        from_stage = stages[i][0]
+        to_stage = stages[i + 1][0]
+        transition_counter[(from_stage, to_stage)] += 1
+transition_df = pd.DataFrame([
+    {'From': k[0], 'To': k[1], 'Count': v}
+    for k, v in transition_counter.items()
+]).sort_values(by='Count', ascending=False).reset_index(drop=True)
