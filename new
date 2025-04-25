@@ -1,22 +1,71 @@
+import pandas as pd
 from collections import defaultdict
 
+# --- STEP 1: Setup Columns ---
+timestamp_columns = [
+    'Backlog', 'Ready_for_Development', 'In_Development', 'Ready_for_Test',
+    'In_Test', 'Ready_for_UAT', 'In_UAT', 'Ready_for_Deployment', 'Done', 'Cancelled'
+]
+
+# Progress stages = real work stages
+progress_stages = [col for col in timestamp_columns if col not in ['Backlog', 'Done', 'Cancelled']]
+
+# --- STEP 2: Cap Each Timestamp at Done/Cancelled ---
+def cap_stage(row, col):
+    end_time = row['Done'] if pd.notna(row['Done']) else row['Cancelled']
+    if pd.notna(row[col]) and pd.notna(end_time):
+        return min(row[col], end_time)
+    return row[col]
+
+for col in timestamp_columns:
+    df[col] = df.apply(lambda row: cap_stage(row, col), axis=1)
+
+# --- STEP 3: Find First In Progress Stage ---
+def get_first_in_progress(row):
+    stages = {col: row[col] for col in progress_stages if pd.notna(row[col])}
+    return min(stages.values()) if stages else pd.NaT
+
+df['first_In_Progress'] = df.apply(get_first_in_progress, axis=1)
+
+# --- STEP 4: Flag Tasks that Skipped Workflow (Backlog → Done directly) ---
+df['Skipped_Workflow'] = (
+    df['Backlog'].notna() &
+    df['Done'].notna() &
+    df['first_In_Progress'].isna()
+)
+
+# --- STEP 5: Filter to Only Valid Tasks (Real Work Started) ---
+df_tracked = df[~df['Skipped_Workflow']].copy()
+df_tracked = df_tracked[df_tracked['first_In_Progress'].notna()].copy()
+
+# --- STEP 6: Calculate Major Milestone Durations ---
+df_tracked['Backlog_to_first_InProgress'] = (
+    (df_tracked['first_In_Progress'] - df_tracked['Backlog']).dt.total_seconds() / 86400
+).round(2).clip(lower=0.01)
+
+df_tracked['InProgress_to_Done'] = (
+    (df_tracked['Done'] - df_tracked['first_In_Progress']).dt.total_seconds() / 86400
+).round(2).clip(lower=0.01)
+
+df_tracked['Backlog_to_Done'] = (
+    (df_tracked['Done'] - df_tracked['Backlog']).dt.total_seconds() / 86400
+).round(2).clip(lower=0.01)
+
+# --- STEP 7: Build True Sequential Stage-to-Stage Durations ---
 transition_duration_dict = defaultdict(list)
 
-# Loop through each task (row)
 for _, row in df_tracked.iterrows():
-    # Get all valid timestamps for this task
     stages = [(col, row[col]) for col in timestamp_columns if pd.notna(row[col])]
-    stages = sorted(stages, key=lambda x: x[1])  # Sort by actual time
+    stages = sorted(stages, key=lambda x: x[1])  # sort by actual time
 
-    # Calculate only transitions
     for i in range(len(stages) - 1):
         from_stage, start_time = stages[i]
         to_stage, end_time = stages[i + 1]
-
-        duration = (end_time - start_time).total_seconds() / 86400  # Convert seconds to days
+        duration = (end_time - start_time).total_seconds() / 86400  # days
         if duration >= 0:
             transition_name = f"{from_stage} to {to_stage}"
             transition_duration_dict[transition_name].append(round(duration, 2))
 
+# --- STEP 8: Write Transitions to df_tracked ---
 for transition, durations in transition_duration_dict.items():
     df_tracked[transition] = pd.Series(durations)
