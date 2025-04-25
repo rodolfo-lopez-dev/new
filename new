@@ -1,59 +1,68 @@
 
 import seaborn as sns
 import matplotlib.pyplot as plt
+import numpy as np
 
 # --- 1. SETUP ---
 sns.set_theme(style="whitegrid", font="Arial")
 plt.rcParams['grid.linewidth'] = 0.5
 
-# --- 2. VISUAL ELEMENTS ---
-# Define colors as simple names
-BLUE = "dodgerblue"
-GREEN = "limegreen"
-GOLD = "gold"
-
-# Define data columns
+# --- 2. SAFE DATA PREP ---
+# Define columns and labels
 columns = ['Backlog_to_First_InProgress', 'InProgress_to_Done', 'Backlog_to_Done']
 labels = ["Backlog → First Progress", "In Progress → Done", "Total Cycle"]
+
+# Filter out NaN/infinite values
+clean_data = [df[col].dropna().replace([np.inf, -np.inf], np.nan).dropna().values 
+              for col in columns]
 
 # --- 3. CREATE PLOT ---
 plt.figure(figsize=(10,6))
 
-# Boxes with manual colors
-boxes = plt.boxplot(df[columns], 
-                   patch_artist=True,  # Enable coloring
+# Boxplot with manual colors
+boxes = plt.boxplot(clean_data, 
+                   patch_artist=True,
                    widths=0.5,
                    medianprops={'color':'white', 'linewidth':2})
 
 # Apply colors
-for box, color in zip(boxes['boxes'], [BLUE, GREEN, GOLD]):
+color_map = ['dodgerblue', 'limegreen', 'gold']
+for box, color in zip(boxes['boxes'], color_map):
     box.set_facecolor(color)
 
-# Dots (individual tasks)
-for i, col in enumerate(columns):
-    plt.scatter(x=[i+1]*len(df),  # X positions
-               y=df[col],         # Y values
+# Dots (with jitter)
+for i, col_data in enumerate(clean_data):
+    x_pos = np.random.normal(i+1, 0.1, size=len(col_data))  # Jitter effect
+    plt.scatter(x=x_pos,
+               y=col_data,
                color='black',
-               alpha=0.3,
-               s=20)  # Dot size
+               alpha=0.4,
+               s=30,  # Dot size
+               edgecolor='white',
+               linewidth=0.5)
 
 # --- 4. ANNOTATIONS ---
-for i, col in enumerate(columns):
-    # Median (centered in box)
-    median = df[col].median()
-    plt.text(i+1, median, f"Med: {median:.1f}d", 
-             ha='center', va='center',
-             color='white',
-             weight='bold')
-    
-    # Average (below box)
-    avg = df[col].mean()
-    plt.text(i+1, max(df[col])*0.95, f"Avg: {avg:.1f}d", 
-             ha='center', va='top',
-             color='black')
+for i, col_data in enumerate(clean_data):
+    if len(col_data) > 0:  # Only annotate if data exists
+        median = np.median(col_data)
+        avg = np.mean(col_data)
+        
+        # Median annotation
+        plt.text(i+1, median, f"Med: {median:.1f}d", 
+                ha='center', va='center',
+                color='white',
+                weight='bold',
+                bbox=dict(facecolor='#333333', alpha=0.9, pad=2))
+        
+        # Average annotation
+        plt.text(i+1, np.max(col_data)*0.95, f"Avg: {avg:.1f}d", 
+                ha='center', va='top',
+                color='black',
+                bbox=dict(facecolor='white', alpha=0.8, pad=1))
 
-# --- 5. FINISHING ---
-plt.xticks([1,2,3], labels)
-plt.ylabel("Days")
-plt.title("Workflow Durations", pad=15)
+# --- 5. FINAL TOUCHES ---
+plt.xticks([1, 2, 3], labels)
+plt.ylabel("Duration (Days)")
+plt.title("Workflow Phase Durations", pad=15)
+plt.tight_layout()
 plt.show()
