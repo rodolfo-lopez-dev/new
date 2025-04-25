@@ -1,56 +1,46 @@
 
+import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-# --- 1. SETUP ---
-sns.set_theme(style="whitegrid", font="Arial")
-plt.rcParams['grid.linewidth'] = 0.3
-
-# --- 2. DATA & COLORS ---
-columns = ['Backlog_to_First_InProgress', 'InProgress_to_Done', 'Backlog_to_Done']
-labels = ["Backlog → First Progress", "In Progress → Done", "Total Cycle"]
-colors = ['dodgerblue', 'limegreen', 'gold']  # Simple color names
-
-# --- 3. PLOT ---
-plt.figure(figsize=(10, 6))
-
-# Boxplot (transparent boxes)
-boxes = sns.boxplot(data=df[columns],
-                   width=0.6,
-                   linewidth=1.5,
-                   flierprops={"marker": "x", "markersize": 5})  # Mark outliers
-
-# Color boxes manually
-for i, box in enumerate(boxes.artists):
-    box.set_facecolor(colors[i])
-    box.set_alpha(0.3)  # Translucent boxes
-
-# Individual dots
-sns.stripplot(data=df[columns],
-             palette=colors,
-             size=6,
-             alpha=0.5,
-             jitter=0.15,
-             linewidth=0.5,
-             edgecolor='white')
-
-# --- 4. AVERAGE ANNOTATIONS ---
-for i, col in enumerate(columns):
-    avg = df[col].mean()
+# 1. AUTO-DETECT TRANSITION COLUMNS
+def extract_transitions(df):
+    """Find all [Stage1]_to_[Stage2] columns automatically"""
+    transitions = [col for col in df.columns if '_to_' in col]
     
-    # Bold average label
-    plt.text(i, avg, f"Avg: {avg:.1f}d", 
-            ha='center', va='center',
-            fontsize=10,
-            color='white',
-            weight='bold',
-            bbox=dict(facecolor=colors[i], 
-                     edgecolor='none', 
-                     boxstyle='round,pad=0.3'))
+    # Get unique stages from column names
+    all_stages = set()
+    for col in transitions:
+        from_stage, to_stage = col.split('_to_')
+        all_stages.update([from_stage, to_stage])
+    all_stages = sorted(all_stages)
+    
+    # Build transition matrix
+    transition_matrix = pd.DataFrame(index=all_stages, columns=all_stages)
+    for col in transitions:
+        from_stage, to_stage = col.split('_to_')
+        transition_matrix.loc[from_stage, to_stage] = df[col].median()
+    
+    return transition_matrix
 
-# --- 5. FORMATTING ---
-plt.xticks(range(len(labels)), labels)
-plt.ylabel("Duration (Days)")
-plt.title("Workflow Durations (Averages Highlighted)", pad=15)
+# 2. GENERATE HEATMAP
+transition_data = extract_transitions(df)
+
+plt.figure(figsize=(10, 8))
+sns.heatmap(
+    transition_data.astype(float),
+    annot=True,
+    fmt=".1f",
+    cmap="YlOrRd",
+    linewidths=0.5,
+    linecolor='white',
+    mask=transition_data.isna()  # Hide empty cells
+)
+
+plt.title("Workflow Transition Times (Auto-Extracted)", pad=20)
+plt.xlabel("To Stage →", labelpad=10)
+plt.ylabel("← From Stage", labelpad=10)
+plt.xticks(rotation=45, ha='right')
+plt.yticks(rotation=0)
 plt.tight_layout()
 plt.show()
