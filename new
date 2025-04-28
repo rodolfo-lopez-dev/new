@@ -1,71 +1,24 @@
-import pandas as pd
-from collections import defaultdict
+plt.figure(figsize=(10, 6))
 
-# --- STEP 1: Setup Columns ---
-timestamp_columns = [
-    'Backlog', 'Ready_for_Development', 'In_Development', 'Ready_for_Test',
-    'In_Test', 'Ready_for_UAT', 'In_UAT', 'Ready_for_Deployment', 'Done', 'Cancelled'
-]
+# Create bars
+bars = plt.bar(range(len(tasks_started_by_month)), tasks_started_by_month.values(), color='mediumseagreen')
 
-# Progress stages = real work stages
-progress_stages = [col for col in timestamp_columns if col not in ['Backlog', 'Done', 'Cancelled']]
+# Annotate each bar
+for idx, bar in enumerate(bars):
+    y = bar.get_height()
+    plt.text(bar.get_x() + bar.get_width()/2, y + 1, f'{int(y)} tasks', ha='center', fontsize=10)
 
-# --- STEP 2: Cap Each Timestamp at Done/Cancelled ---
-def cap_stage(row, col):
-    end_time = row['Done'] if pd.notna(row['Done']) else row['Cancelled']
-    if pd.notna(row[col]) and pd.notna(end_time):
-        return min(row[col], end_time)
-    return row[col]
+# Fix x-ticks manually
+plt.xticks(ticks=range(len(tasks_started_by_month)), labels=list(tasks_started_by_month.keys()), rotation=0, fontsize=11)
 
-for col in timestamp_columns:
-    df[col] = df.apply(lambda row: cap_stage(row, col), axis=1)
+plt.title('Tasks Started per Month (Jan - Mar)', fontsize=16)
+plt.ylabel('Number of Tasks Started', fontsize=12)
+plt.xlabel('Month', fontsize=12)
+plt.yticks(fontsize=11)
+plt.grid(axis='y', linestyle='--', alpha=0.7)
 
-# --- STEP 3: Find First In Progress Stage ---
-def get_first_in_progress(row):
-    stages = {col: row[col] for col in progress_stages if pd.notna(row[col])}
-    return min(stages.values()) if stages else pd.NaT
+plt.tight_layout()
+plt.show()
 
-df['first_In_Progress'] = df.apply(get_first_in_progress, axis=1)
 
-# --- STEP 4: Flag Tasks that Skipped Workflow (Backlog → Done directly) ---
-df['Skipped_Workflow'] = (
-    df['Backlog'].notna() &
-    df['Done'].notna() &
-    df['first_In_Progress'].isna()
-)
 
-# --- STEP 5: Filter to Only Valid Tasks (Real Work Started) ---
-df_tracked = df[~df['Skipped_Workflow']].copy()
-df_tracked = df_tracked[df_tracked['first_In_Progress'].notna()].copy()
-
-# --- STEP 6: Calculate Major Milestone Durations ---
-df_tracked['Backlog_to_first_InProgress'] = (
-    (df_tracked['first_In_Progress'] - df_tracked['Backlog']).dt.total_seconds() / 86400
-).round(2).clip(lower=0.01)
-
-df_tracked['InProgress_to_Done'] = (
-    (df_tracked['Done'] - df_tracked['first_In_Progress']).dt.total_seconds() / 86400
-).round(2).clip(lower=0.01)
-
-df_tracked['Backlog_to_Done'] = (
-    (df_tracked['Done'] - df_tracked['Backlog']).dt.total_seconds() / 86400
-).round(2).clip(lower=0.01)
-
-# --- STEP 7: Build True Sequential Stage-to-Stage Durations ---
-transition_duration_dict = defaultdict(list)
-
-for _, row in df_tracked.iterrows():
-    stages = [(col, row[col]) for col in timestamp_columns if pd.notna(row[col])]
-    stages = sorted(stages, key=lambda x: x[1])  # sort by actual time
-
-    for i in range(len(stages) - 1):
-        from_stage, start_time = stages[i]
-        to_stage, end_time = stages[i + 1]
-        duration = (end_time - start_time).total_seconds() / 86400  # days
-        if duration >= 0:
-            transition_name = f"{from_stage} to {to_stage}"
-            transition_duration_dict[transition_name].append(round(duration, 2))
-
-# --- STEP 8: Write Transitions to df_tracked ---
-for transition, durations in transition_duration_dict.items():
-    df_tracked[transition] = pd.Series(durations)
