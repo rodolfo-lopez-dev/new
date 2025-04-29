@@ -1,24 +1,103 @@
-plt.figure(figsize=(10, 6))
+import pandas as pd
+from collections import defaultdict
 
-# Create bars
-bars = plt.bar(range(len(tasks_started_by_month)), tasks_started_by_month.values(), color='mediumseagreen')
+# --- 1. Setup Stage Columns ---
+timestamp_columns = [
+    'Backlog',
+    'Ready for Development', 'In Development', 'Blocked',
+    'Ready for UAT', 'In UAT', 'Ready for Deployment', 'Ready for Test',
+    'In Test', 'Done', 'Cancelled'
+]
 
-# Annotate each bar
-for idx, bar in enumerate(bars):
-    y = bar.get_height()
-    plt.text(bar.get_x() + bar.get_width()/2, y + 1, f'{int(y)} tasks', ha='center', fontsize=10)
+progress_stages = [col for col in timestamp_columns if col not in ['Backlog', 'Done', 'Cancelled']]
 
-# Fix x-ticks manually
-plt.xticks(ticks=range(len(tasks_started_by_month)), labels=list(tasks_started_by_month.keys()), rotation=0, fontsize=11)
+# --- 2. Clean Story Points ---
+df['Story Points'] = pd.to_numeric(df['Story Points'], errors='coerce')
+df['Story Points'].fillna(0, inplace=True)
 
-plt.title('Tasks Started per Month (Jan - Mar)', fontsize=16)
-plt.ylabel('Number of Tasks Started', fontsize=12)
-plt.xlabel('Month', fontsize=12)
-plt.yticks(fontsize=11)
-plt.grid(axis='y', linestyle='--', alpha=0.7)
+# --- 3. Convert timestamp columns to datetime ---
+for col in timestamp_columns:
+    if col in df.columns:
+        df[col] = pd.to_datetime(df[col], errors='coerce')
 
-plt.tight_layout()
-plt.show()
+# --- 4. Filter based on Backlog and reporting window ---
+start_date = pd.to_datetime("2024-12-30")
+end_date = pd.to_datetime("2025-04-02")
 
+df = df[
+    df['Backlog'].notna() &
+    (df['Backlog'] >= start_date) &
+    (df['Backlog'] <= end_date) &
+    ((df['Done'].isna()) | (df['Done'] <= end_date))
+].copy()
 
+# --- 5. Cap each stage's timestamp at Done or Cancelled ---
+def cap_stage(row, col):
+    end_time = row['Done'] if pd.notna(row['Done']) else row['Cancelled']
+    if pd.notna(row[col]) and pd.notna(end_time):
+        return min(row[col], end_time)
+    return row[col]
 
+for col in timestamp_columns:
+    df[col] = df.apply(lambda row: cap_stage(row, col), axis=1)
+
+# --- 6. Get First In-Progress Timestamp (for milestone tracking) ---
+def get_first_in_progress(row):
+    stages = {col: row[col] for col in progress_stages if pd.notna(row[col])}
+    return min(stages.values()) if stages else pd.NaT
+
+df['First_In_Progress'] = df.apply(get_first_in_progress, axis=1)
+
+# --- 7. Flag Skipped Workflows (Backlog → Done or Cancelled directly) ---
+df['Skipped_Workflow'] = (
+    df['Backlog'].notna() &
+    (df['Done'].notna() | df['Cancelled'].notna()) &
+    df['First_In_Progress'].isna()
+)
+
+# --- 8. Create df_tracked (Tasks That Really Entered Workflow) ---
+df_tracked = df[~df['Skipped_Workflow']].copy()
+
+# --- 9. Keep tasks with at least 2 real timestamps (actual movement) ---
+df_tracked = df_tracked[df_tracked[timestamp_columns].notna().sum(axis=1) >= 2].copy()
+
+# --- 10. Calculate Major Milestones (for reports) ---
+df_tracked['Backlog_to_First_InProgress'] = (
+    (df_tracked['First_In_Progress'] - df_tracked['Backlog']).dt.total_seconds() / 86400
+).round(2).clip(lower=0.01)
+
+df_tracked['InProgress_to_Done'] = (
+    (df_tracked['Done'] - df_tracked['First_In_Progress']).dt.total_seconds() / 86400
+).round(2).clip(lower=0.01)
+
+df_tracked['Backlog_to_Done'] = (
+    (df_tracked['Done'] - df_tracked['Backlog']).dt.total_seconds() / 86400
+).round(2).clip(lower=0.01)
+
+# --- 11. Build Transitions Task-by-Task (Correctly) ---
+# Initialize transition columns
+all_transitions = []
+for col_start in timestamp_columns:
+    for col_end in timestamp_columns:
+        if col_start != col_end:
+            transition_name = f"{col_start} to {col_end}"
+            all_transitions.append(transition_name)
+            df_tracked[transition_name] = None  # Initialize empty
+
+# Build transitions task-by-task
+for idx, row in df_tracked.iterrows():
+    stages = [(col, row[col]) for col in timestamp_columns if pd.notna(row[col])]
+    stages = sorted(stages, key=lambda x: x[1])
+
+    for i in range(len(stages) - 1):
+        from_stage, start_time = stages[i]
+        to_stage, end_time = stages[i + 1]
+
+        duration = (end_time - start_time).total_seconds() / 86400  # in days
+        if duration >= 0:
+            transition_name = f"{from_stage} to {to_stage}"
+            if transition_name in df_tracked.columns:
+                df_tracked.at[idx, transition_name] = round(duration, 2)
+
+# --- 12. Optional: Print Skipped Workflows Count ---
+print(df['Skipped_Workflow'].value_counts())
