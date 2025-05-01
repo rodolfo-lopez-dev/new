@@ -1,16 +1,16 @@
 
 
-# --- 1. Add Final Status (Done, Cancelled, or In Progress) ---
+# --- 1. Final Status (Done, Cancelled, In Progress) ---
 df['Final_Status'] = df.apply(
     lambda row: 'Done' if pd.notna(row['Done']) else (
         'Cancelled' if pd.notna(row['Cancelled']) else 'In Progress'
     ), axis=1
 )
 
-# --- 2. Filter to Completed Tasks (Done or Cancelled) ---
+# --- 2. Filter to completed tasks only ---
 completed = df[df['Final_Status'].isin(['Done', 'Cancelled'])].copy()
 
-# --- 3. Create Assignee Summary Table ---
+# --- 3. Group and summarize per assignee ---
 summary = completed.groupby('Assignee').agg(
     Tasks=('Issue key', 'count'),
     StoryPoints=('Story Points', 'sum')
@@ -18,17 +18,26 @@ summary = completed.groupby('Assignee').agg(
 
 summary['AvgSPPerTask'] = (summary['StoryPoints'] / summary['Tasks']).round(2)
 
-# --- 4. Plot Visual ---
+# --- 4. Plot grouped bar chart with spacing and value labels ---
 fig, ax = plt.subplots(figsize=(10, 6))
-x = range(len(summary))
+
+spacing = 1.2  # space between groups
+x = np.arange(len(summary)) * spacing
 bar_width = 0.3
 
-# Bar groups
-ax.bar([i - bar_width for i in x], summary['Tasks'], width=bar_width, label='Tasks Completed', color='steelblue')
-ax.bar(x, summary['StoryPoints'], width=bar_width, label='Story Points', color='seagreen')
-ax.bar([i + bar_width for i in x], summary['AvgSPPerTask'], width=bar_width, label='Avg SP / Task', color='orange')
+# Bars
+bars1 = ax.bar(x - bar_width, summary['Tasks'], width=bar_width, label='Tasks Completed', color='steelblue')
+bars2 = ax.bar(x, summary['StoryPoints'], width=bar_width, label='Story Points', color='seagreen')
+bars3 = ax.bar(x + bar_width, summary['AvgSPPerTask'], width=bar_width, label='Avg SP / Task', color='orange')
 
-# Labels and style
+# Labels on top of bars
+for bars in [bars1, bars2, bars3]:
+    for bar in bars:
+        height = bar.get_height()
+        ax.text(bar.get_x() + bar.get_width()/2, height + 0.5, f'{height:.1f}', 
+                ha='center', va='bottom', fontsize=9)
+
+# Axis and formatting
 ax.set_xticks(x)
 ax.set_xticklabels(summary['Assignee'], rotation=45, ha='right', fontsize=10)
 ax.set_ylabel('Metric Value')
