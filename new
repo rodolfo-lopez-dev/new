@@ -1,31 +1,37 @@
-assignee_summary = completed_tasks.groupby('Assignee').agg(
-    Tasks_Completed=('Issue key', 'count'),
-    Story_Points_Completed=('Story Points', 'sum')
+
+
+# --- 1. Add Final Status (Done, Cancelled, or In Progress) ---
+df['Final_Status'] = df.apply(
+    lambda row: 'Done' if pd.notna(row['Done']) else (
+        'Cancelled' if pd.notna(row['Cancelled']) else 'In Progress'
+    ), axis=1
+)
+
+# --- 2. Filter to Completed Tasks (Done or Cancelled) ---
+completed = df[df['Final_Status'].isin(['Done', 'Cancelled'])].copy()
+
+# --- 3. Create Assignee Summary Table ---
+summary = completed.groupby('Assignee').agg(
+    Tasks=('Issue key', 'count'),
+    StoryPoints=('Story Points', 'sum')
 ).reset_index()
 
-assignee_summary['Avg_Story_Points_Per_Task'] = (
-    assignee_summary['Story_Points_Completed'] / assignee_summary['Tasks_Completed']
-).round(2)
+summary['AvgSPPerTask'] = (summary['StoryPoints'] / summary['Tasks']).round(2)
 
-
-import matplotlib.pyplot as plt
-
-# Set figure and axis
+# --- 4. Plot Visual ---
 fig, ax = plt.subplots(figsize=(10, 6))
-
-# Bar width and position
+x = range(len(summary))
 bar_width = 0.3
-positions = range(len(assignee_summary))
 
-# Plot each bar
-ax.bar([p - bar_width for p in positions], assignee_summary['Tasks_Completed'], width=bar_width, label='Tasks Completed', color='steelblue')
-ax.bar(positions, assignee_summary['Story_Points_Completed'], width=bar_width, label='Story Points Completed', color='seagreen')
-ax.bar([p + bar_width for p in positions], assignee_summary['Avg_Story_Points_Per_Task'], width=bar_width, label='Avg SP per Task', color='orange')
+# Bar groups
+ax.bar([i - bar_width for i in x], summary['Tasks'], width=bar_width, label='Tasks Completed', color='steelblue')
+ax.bar(x, summary['StoryPoints'], width=bar_width, label='Story Points', color='seagreen')
+ax.bar([i + bar_width for i in x], summary['AvgSPPerTask'], width=bar_width, label='Avg SP / Task', color='orange')
 
-# Labels and formatting
-ax.set_xticks(positions)
-ax.set_xticklabels(assignee_summary['Assignee'], rotation=45, ha='right', fontsize=10)
-ax.set_ylabel('Metric Value', fontsize=12)
+# Labels and style
+ax.set_xticks(x)
+ax.set_xticklabels(summary['Assignee'], rotation=45, ha='right', fontsize=10)
+ax.set_ylabel('Metric Value')
 ax.set_title('Assignee Task Completion Summary', fontsize=14, fontweight='bold')
 ax.legend()
 ax.grid(axis='y', linestyle='--', alpha=0.5)
