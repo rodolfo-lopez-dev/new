@@ -1,95 +1,34 @@
-import pandas as pd
-from collections import defaultdict
+assignee_summary = completed_tasks.groupby('Assignee').agg(
+    Tasks_Completed=('Issue key', 'count'),
+    Story_Points_Completed=('Story Points', 'sum')
+).reset_index()
 
-# --- 1. Define stage columns ---
-timestamp_columns = [
-    'Backlog',
-    'Ready for Development', 'In Development', 'Blocked',
-    'Ready for UAT', 'In UAT', 'Ready for Deployment', 'Ready for Test',
-    'In Test', 'Done', 'Cancelled'
-]
-progress_stages = [col for col in timestamp_columns if col not in ['Backlog', 'Done', 'Cancelled']]
+assignee_summary['Avg_Story_Points_Per_Task'] = (
+    assignee_summary['Story_Points_Completed'] / assignee_summary['Tasks_Completed']
+).round(2)
 
-# --- 2. Clean story points ---
-df['Story Points'] = pd.to_numeric(df['Story Points'], errors='coerce')
-df['Story Points'].fillna(0, inplace=True)
 
-# --- 3. Convert timestamps to datetime ---
-for col in timestamp_columns:
-    if col in df.columns:
-        df[col] = pd.to_datetime(df[col], errors='coerce')
+import matplotlib.pyplot as plt
 
-# --- 4. Filter valid timeframe based on Backlog ---
-start_date = pd.to_datetime("2024-12-30")
-end_date = pd.to_datetime("2025-04-02")
+# Set figure and axis
+fig, ax = plt.subplots(figsize=(10, 6))
 
-df = df[
-    df['Backlog'].notna() &
-    (df['Backlog'] >= start_date) &
-    (df['Backlog'] <= end_date) &
-    ((df['Done'].isna()) | (df['Done'] <= end_date))
-].copy()
+# Bar width and position
+bar_width = 0.3
+positions = range(len(assignee_summary))
 
-# --- 5. Cap timestamps at Done/Cancelled ---
-def cap_stage(row, col):
-    end_time = row['Done'] if pd.notna(row['Done']) else row['Cancelled']
-    if pd.notna(row[col]) and pd.notna(end_time):
-        return min(row[col], end_time)
-    return row[col]
+# Plot each bar
+ax.bar([p - bar_width for p in positions], assignee_summary['Tasks_Completed'], width=bar_width, label='Tasks Completed', color='steelblue')
+ax.bar(positions, assignee_summary['Story_Points_Completed'], width=bar_width, label='Story Points Completed', color='seagreen')
+ax.bar([p + bar_width for p in positions], assignee_summary['Avg_Story_Points_Per_Task'], width=bar_width, label='Avg SP per Task', color='orange')
 
-for col in timestamp_columns:
-    df[col] = df.apply(lambda row: cap_stage(row, col), axis=1)
+# Labels and formatting
+ax.set_xticks(positions)
+ax.set_xticklabels(assignee_summary['Assignee'], rotation=45, ha='right', fontsize=10)
+ax.set_ylabel('Metric Value', fontsize=12)
+ax.set_title('Assignee Task Completion Summary', fontsize=14, fontweight='bold')
+ax.legend()
+ax.grid(axis='y', linestyle='--', alpha=0.5)
 
-# --- 6. First in-progress (for milestone metrics only) ---
-def get_first_in_progress(row):
-    stages = {col: row[col] for col in progress_stages if pd.notna(row[col])}
-    return min(stages.values()) if stages else pd.NaT
-
-df['First_In_Progress'] = df.apply(get_first_in_progress, axis=1)
-
-# --- 7. Identify skipped workflows (Backlog → Done or Cancelled only) ---
-df['Skipped_Workflow'] = (
-    df['Backlog'].notna() &
-    (df['Done'].notna() | df['Cancelled'].notna()) &
-    df['First_In_Progress'].isna()
-)
-
-# --- 8. Filter: real workflow tasks with 2+ timestamps ---
-df_tracked = df[~df['Skipped_Workflow']].copy()
-df_tracked = df_tracked[df_tracked[timestamp_columns].notna().sum(axis=1) >= 2].copy()
-
-# --- 9. Milestone durations ---
-df_tracked['Backlog_to_First_InProgress'] = (
-    (df_tracked['First_In_Progress'] - df_tracked['Backlog']).dt.total_seconds() / 86400
-).round(2).clip(lower=0.01)
-
-df_tracked['InProgress_to_Done'] = (
-    (df_tracked['Done'] - df_tracked['First_In_Progress']).dt.total_seconds() / 86400
-).round(2).clip(lower=0.01)
-
-df_tracked['Backlog_to_Done'] = (
-    (df_tracked['Done'] - df_tracked['Backlog']).dt.total_seconds() / 86400
-).round(2).clip(lower=0.01)
-
-# --- 10. Build transition durations per task into a temporary dict-of-dicts ---
-transition_data = {}
-
-for idx, row in df_tracked.iterrows():
-    stages = [(col, row[col]) for col in timestamp_columns if pd.notna(row[col])]
-    stages = sorted(stages, key=lambda x: x[1])
-
-    for i in range(len(stages) - 1):
-        from_stage, start_time = stages[i]
-        to_stage, end_time = stages[i + 1]
-
-        duration = (end_time - start_time).total_seconds() / 86400
-        if duration >= 0:
-            transition_name = f"{from_stage} to {to_stage}"
-            transition_data.setdefault(transition_name, {})[idx] = round(duration, 2)
-
-# --- 11. Convert to transition DataFrame and merge it back ---
-transition_df = pd.DataFrame.from_dict(transition_data)
-df_tracked = df_tracked.join(transition_df)
-
-# --- 12. Optional: Print skipped workflows count for transparency ---
-print("Skipped Workflow Count:\n", df['Skipped_Workflow'].value_counts())
+plt.tight_layout()
+plt.show()
