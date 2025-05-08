@@ -1,0 +1,45 @@
+
+
+# Step 1: Extract Start_Week and Done_Week
+df['Start_Week'] = pd.to_datetime(df['First_In_Progress']).dt.isocalendar().week
+df['Done_Week'] = pd.to_datetime(df['Done']).dt.isocalendar().week
+
+# Step 2: Define PI 25.1 time range
+quarter_start = pd.to_datetime('2025-01-01')
+quarter_end = pd.to_datetime('2025-03-31')
+
+# Step 3: Filter to tasks started within PI 25.1
+quarter_tasks = df[
+    df['First_In_Progress'].notna() &
+    (df['First_In_Progress'] >= quarter_start) &
+    (df['First_In_Progress'] <= quarter_end) &
+    df['Done'].notna()
+]
+
+# Step 4: Group by Done_Week
+quarter_weekly = quarter_tasks.groupby('Done_Week')['Story Points'].sum().reset_index()
+quarter_weekly.rename(columns={'Done_Week': 'Week', 'Story Points': 'Completed'}, inplace=True)
+
+# Step 5: Calculate average
+average = quarter_weekly['Completed'].mean()
+
+# Step 6: Plot with trendline and annotations
+plt.figure(figsize=(10, 5))
+plt.plot(quarter_weekly['Week'], quarter_weekly['Completed'],
+         marker='o', linestyle='-', color='navy', label='Completed')
+
+plt.axhline(average, color='darkgreen', linestyle='--', label=f'Avg: {average:.1f} Story Points')
+
+# Add data labels
+for x, y in zip(quarter_weekly['Week'], quarter_weekly['Completed']):
+    plt.text(x, y + 0.5, f'{y}', ha='center', fontsize=9)
+
+# Final touches
+plt.title('PI 25.1 Weekly Story Point Completion — Tasks Started This Quarter')
+plt.xlabel('Week')
+plt.ylabel('Story Points')
+plt.grid(True, linestyle='--', alpha=0.6)
+plt.xticks(rotation=45)
+plt.legend()
+plt.tight_layout()
+plt.show()
