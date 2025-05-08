@@ -1,3 +1,5 @@
+import matplotlib.pyplot as plt
+
 monthly_focus = []
 
 for label, (start_date, end_date) in month_windows.items():
@@ -8,42 +10,61 @@ for label, (start_date, end_date) in month_windows.items():
         (df['First_In_Progress'] <= end_date)
     ]
 
-    # Of those, how many were also completed in the same month
-    completed_same_month = started[
+    # Tasks completed in the same month (from those started)
+    completed = started[
         started['Done'].notna() &
         (started['Done'] >= start_date) &
         (started['Done'] <= end_date)
     ]
 
+    # Metrics
     started_count = len(started)
-    completed_count = len(completed_same_month)
-    rate = (completed_count / started_count * 100) if started_count > 0 else 0
+    completed_count = len(completed)
+    missing_sp_count = started['Story Points'].isna().sum()
+    completion_pct = (completed_count / started_count * 100) if started_count > 0 else 0
 
     monthly_focus.append({
         'Month': label,
         'Started': started_count,
         'Completed': completed_count,
-        'Completion %': round(rate, 1)
+        'Missing SP': missing_sp_count,
+        'Completion %': round(completion_pct, 1)
     })
 
-# Convert to DataFrame
+# Build DataFrame and set order
 plot_df = pd.DataFrame(monthly_focus)
 plot_df['Month'] = pd.Categorical(plot_df['Month'], categories=month_order, ordered=True)
 
 # Plot
-plt.figure(figsize=(8, 5))
+plt.figure(figsize=(9, 5))
 bar_width = 0.4
 x = range(len(plot_df))
 
-plt.bar([i - bar_width/2 for i in x], plot_df['Started'], width=bar_width, color='silver', label='Started')
-plt.bar([i + bar_width/2 for i in x], plot_df['Completed'], width=bar_width, color='navy', label='Completed')
+# Bars (Completed on left, Started on right)
+plt.bar([i - bar_width/2 for i in x], plot_df['Completed'], width=bar_width, color='navy', label='Completed')
+plt.bar([i + bar_width/2 for i in x], plot_df['Started'], width=bar_width, color='silver', label='Started')
 
-# % labels above Completed bars
+# Annotate inside each bar
 for i, row in plot_df.iterrows():
-    plt.text(i + bar_width/2, row['Completed'] + 0.3, f"{row['Completion %']}%", 
-             ha='center', fontsize=9, color='navy')
+    # Completed count
+    plt.text(i - bar_width/2, row['Completed'] / 2, f"{row['Completed']}", 
+             ha='center', va='center', color='white', fontsize=9)
 
-# Format
+    # Started count + missing
+    label = f"{row['Started']}"
+    if row['Missing SP'] > 0:
+        label += f"\n({row['Missing SP']} missing)"
+    plt.text(i + bar_width/2, row['Started'] / 2, label, 
+             ha='center', va='center', color='black', fontsize=9)
+
+# % label above Completed bar
+for i, row in plot_df.iterrows():
+    if row['Started'] > 0:
+        pct = row['Completion %']
+        plt.text(i - bar_width/2, row['Completed'] + 0.8, f"{pct:.0f}%", 
+                 ha='center', fontsize=9, color='navy')
+
+# Final formatting
 plt.xticks(x, plot_df['Month'])
 plt.ylabel('Number of Tasks')
 plt.title('PI 25.1 Task Completion Rate (Started vs Completed Same Month)')
