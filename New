@@ -1,47 +1,48 @@
-# Monthly Story Point Completion Ratio (Corrected)
+import matplotlib.pyplot as plt
+
 monthly_focus = []
 
 for label, (start_date, end_date) in month_windows.items():
-    # Story points started in the month
-    started = df[
+    started_tasks = df[
         df['First_In_Progress'].notna() &
         (df['First_In_Progress'] >= start_date) &
         (df['First_In_Progress'] <= end_date)
-    ]['Story Points'].sum()
+    ]
 
-    # Story points completed in the month
-    completed = df[
-        df['Done'].notna() &
-        (df['Done'] >= start_date) &
-        (df['Done'] <= end_date)
-    ]['Story Points'].sum()
+    assigned = started_tasks['Story Points'].sum(min_count=1)
+    completed = started_tasks[started_tasks['Done'].notna()]['Story Points'].sum(min_count=1)
+    missing_count = started_tasks['Story Points'].isna().sum()
 
-    monthly_focus.append({'Month': label, 'Started': started, 'Completed': completed})
+    if pd.notna(assigned) and assigned > 0:
+        completion_rate = (completed / assigned) * 100
+    else:
+        completion_rate = 0
 
-focus_df = pd.DataFrame(monthly_focus).set_index('Month')
+    monthly_focus.append({
+        'Month': label,
+        'Completion %': round(completion_rate, 1),
+        'Missing Count': missing_count
+    })
 
-# Plotting
-ax_focus = focus_df[['Completed', 'Started']].plot(
-    kind='bar', stacked=False, color=['navy', 'silver'], figsize=(8, 5)
-)
+focus_df = pd.DataFrame(monthly_focus)
 
-for container in ax_focus.containers:
-    ax_focus.bar_label(container, fmt='%.0f', label_type='center', fontsize=9, color='white')
+# Plot
+plt.figure(figsize=(8, 5))
+bars = plt.bar(focus_df['Month'], focus_df['Completion %'], color='navy')
 
-# Add % completion labels above bars
-for idx, row in enumerate(focus_df.itertuples()):
-    if row.Started > 0:
-        pct = row.Completed / row.Started * 100
-        ax_focus.text(idx, row.Completed + 1, f"{pct:.0f}%", ha='right', fontsize=9, color='navy')
+# Annotate with % and missing count (no SP wording)
+for bar, pct, missing in zip(bars, focus_df['Completion %'], focus_df['Missing Count']):
+    x = bar.get_x() + bar.get_width() / 2
+    y = bar.get_height()
+    label = f"{pct:.0f}%"
+    if missing > 0:
+        label += f"\n({missing} missing)"
+    plt.text(x, y + 1, label, ha='center', va='bottom', fontsize=9)
 
-# Average completion line
-avg_completed = focus_df['Completed'].mean()
-ax_focus.axhline(avg_completed, color='darkgreen', linestyle='--', 
-                 label=f'Avg Completed Story Points: {avg_completed:.1f}')
-
-plt.title('PI 25.1 Story Point Completion Ratio')
-plt.ylabel('Story Points')
-plt.xticks(rotation=0)
-plt.legend()
+# Final formatting
+plt.title('PI 25.1 Completion Rate per Month')
+plt.ylabel('Completion %')
+plt.ylim(0, 110)
+plt.grid(axis='y', linestyle='--', alpha=0.5)
 plt.tight_layout()
 plt.show()
