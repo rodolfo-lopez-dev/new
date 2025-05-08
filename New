@@ -1,49 +1,47 @@
- import pandas as pd
-import matplotlib.pyplot as plt
+# Monthly Story Point Completion Ratio (Corrected)
+monthly_focus = []
 
-# Step 1: Extract Done_Week
-df['Done_Week'] = pd.to_datetime(df['Done']).dt.isocalendar().week
+for label, (start_date, end_date) in month_windows.items():
+    # Story points started in the month
+    started = df[
+        df['First_In_Progress'].notna() &
+        (df['First_In_Progress'] >= start_date) &
+        (df['First_In_Progress'] <= end_date)
+    ]['Story Points'].sum()
 
-# Step 2: Filter to PI 25.1 tasks (started Jan–Mar)
-pi_start = pd.to_datetime('2025-01-01')
-pi_end = pd.to_datetime('2025-03-31')
+    # Story points completed in the month
+    completed = df[
+        df['Done'].notna() &
+        (df['Done'] >= start_date) &
+        (df['Done'] <= end_date)
+    ]['Story Points'].sum()
 
-pi_tasks = df[
-    df['First_In_Progress'].notna() &
-    (df['First_In_Progress'] >= pi_start) &
-    (df['First_In_Progress'] <= pi_end) &
-    df['Done'].notna()
-]
+    monthly_focus.append({'Month': label, 'Started': started, 'Completed': completed})
 
-# Step 3: Group by Done_Week and count tasks
-weekly_completion = pi_tasks.groupby('Done_Week')['Issue key'].count().reset_index()
-weekly_completion.rename(columns={'Done_Week': 'Week', 'Issue key': 'Tasks Completed'}, inplace=True)
+focus_df = pd.DataFrame(monthly_focus).set_index('Month')
 
-# Step 4: Force Week 1 through 14
-all_weeks = pd.DataFrame({'Week': list(range(1, 15))})
-weekly_completion = all_weeks.merge(weekly_completion, on='Week', how='left')
-weekly_completion['Tasks Completed'] = weekly_completion['Tasks Completed'].fillna(0).astype(int)
+# Plotting
+ax_focus = focus_df[['Completed', 'Started']].plot(
+    kind='bar', stacked=False, color=['navy', 'silver'], figsize=(8, 5)
+)
 
-# Step 5: Plot
-plt.figure(figsize=(10, 5))
-plt.plot(weekly_completion['Week'], weekly_completion['Tasks Completed'],
-         marker='o', linestyle='-', color='navy', label='Tasks Completed')
+for container in ax_focus.containers:
+    ax_focus.bar_label(container, fmt='%.0f', label_type='center', fontsize=9, color='white')
 
-# Add average trendline
-avg_tasks = weekly_completion['Tasks Completed'].mean()
-plt.axhline(avg_tasks, color='darkgreen', linestyle='--', label=f'Avg: {avg_tasks:.1f} Tasks')
+# Add % completion labels above bars
+for idx, row in enumerate(focus_df.itertuples()):
+    if row.Started > 0:
+        pct = row.Completed / row.Started * 100
+        ax_focus.text(idx, row.Completed + 1, f"{pct:.0f}%", ha='right', fontsize=9, color='navy')
 
-# Add labels
-for x, y in zip(weekly_completion['Week'], weekly_completion['Tasks Completed']):
-    if y > 0:
-        plt.text(x, y + 0.3, f'{y}', ha='center', fontsize=9)
+# Average completion line
+avg_completed = focus_df['Completed'].mean()
+ax_focus.axhline(avg_completed, color='darkgreen', linestyle='--', 
+                 label=f'Avg Completed Story Points: {avg_completed:.1f}')
 
-# Final formatting
-plt.title('PI 25.1 Tasks Progression')
-plt.xlabel('Week')
-plt.ylabel('Tasks Completed')
-plt.grid(True, linestyle='--', alpha=0.6)
-plt.xticks(weekly_completion['Week'])
+plt.title('PI 25.1 Story Point Completion Ratio')
+plt.ylabel('Story Points')
+plt.xticks(rotation=0)
 plt.legend()
 plt.tight_layout()
 plt.show()
