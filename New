@@ -1,10 +1,10 @@
-import pandas as pd
+ import pandas as pd
 import matplotlib.pyplot as plt
 
 # Step 1: Extract Done_Week
 df['Done_Week'] = pd.to_datetime(df['Done']).dt.isocalendar().week
 
-# Step 2: Filter to tasks started within PI 25.1 (Jan–Mar 2025)
+# Step 2: Filter to PI 25.1 tasks (started Jan–Mar)
 pi_start = pd.to_datetime('2025-01-01')
 pi_end = pd.to_datetime('2025-03-31')
 
@@ -19,8 +19,8 @@ pi_tasks = df[
 weekly_completion = pi_tasks.groupby('Done_Week')['Issue key'].count().reset_index()
 weekly_completion.rename(columns={'Done_Week': 'Week', 'Issue key': 'Tasks Completed'}, inplace=True)
 
-# Step 4: Fill all active weeks for continuity
-all_weeks = pd.DataFrame({'Week': sorted(df['Done_Week'].dropna().unique())})
+# Step 4: Force Week 1 through 14
+all_weeks = pd.DataFrame({'Week': list(range(1, 15))})
 weekly_completion = all_weeks.merge(weekly_completion, on='Week', how='left')
 weekly_completion['Tasks Completed'] = weekly_completion['Tasks Completed'].fillna(0).astype(int)
 
