@@ -1,54 +1,55 @@
-
-
 import pandas as pd
 import matplotlib.pyplot as plt
 
-# Step 1: Generate Start_Week and Done_Week
+# Step 1: Add week columns
 df['Start_Week'] = pd.to_datetime(df['First_In_Progress']).dt.isocalendar().week
 df['Done_Week'] = pd.to_datetime(df['Done']).dt.isocalendar().week
 
-# Step 2: Filter to tasks started ONLY in PI 25.1 (Jan–Mar 2025)
+# Step 2: Filter to PI 25.1 tasks (started Jan–Mar)
 pi_start = pd.to_datetime('2025-01-01')
 pi_end = pd.to_datetime('2025-03-31')
 
-pi_tasks = df[
+pi_df = df[
     df['First_In_Progress'].notna() &
     (df['First_In_Progress'] >= pi_start) &
     (df['First_In_Progress'] <= pi_end)
 ]
 
-# Step 3: Only keep those that were completed
-pi_completed = pi_tasks[pi_tasks['Done'].notna()]
+# Step 3: Weekly started and completed story points
+weekly_started = pi_df.groupby('Start_Week')['Story Points'].sum().reset_index()
+weekly_started.rename(columns={'Start_Week': 'Week', 'Story Points': 'Started'}, inplace=True)
 
-# Step 4: Group by Done_Week (completions per week, only for PI-started tasks)
-weekly_progression = pi_completed.groupby('Done_Week')['Story Points'].sum().reset_index()
-weekly_progression.rename(columns={'Done_Week': 'Week', 'Story Points': 'Completed'}, inplace=True)
+weekly_completed = pi_df[pi_df['Done'].notna()].groupby('Done_Week')['Story Points'].sum().reset_index()
+weekly_completed.rename(columns={'Done_Week': 'Week', 'Story Points': 'Completed'}, inplace=True)
 
-# Step 5: Fill all weeks to ensure continuity
-all_weeks = pd.DataFrame({'Week': range(weekly_progression['Week'].min(), weekly_progression['Week'].max() + 1)})
-weekly_progression = all_weeks.merge(weekly_progression, on='Week', how='left')
-weekly_progression['Completed'] = weekly_progression['Completed'].fillna(0).astype(int)
+# Step 4: Merge both into a single view
+all_weeks = pd.DataFrame({'Week': sorted(set(weekly_started['Week']) | set(weekly_completed['Week']))})
+weekly_summary = all_weeks.merge(weekly_started, on='Week', how='left')\
+                          .merge(weekly_completed, on='Week', how='left')
+weekly_summary.fillna(0, inplace=True)
+weekly_summary[['Started', 'Completed']] = weekly_summary[['Started', 'Completed']].astype(int)
 
-# Step 6: Plot
+# Step 5: Plot
 plt.figure(figsize=(10, 5))
-plt.plot(weekly_progression['Week'], weekly_progression['Completed'],
-         marker='o', linestyle='-', color='navy', label='Completed (Started in PI Only)')
+plt.plot(weekly_summary['Week'], weekly_summary['Started'],
+         marker='o', linestyle='-', color='gray', label='Started')
+plt.plot(weekly_summary['Week'], weekly_summary['Completed'],
+         marker='o', linestyle='-', color='navy', label='Completed')
 
-# Add average trendline
-avg_completed = weekly_progression['Completed'].mean()
-plt.axhline(avg_completed, color='darkgreen', linestyle='--', label=f'Avg: {avg_completed:.1f} Story Points')
-
-# Add data labels
-for x, y in zip(weekly_progression['Week'], weekly_progression['Completed']):
+# Data labels
+for x, y in zip(weekly_summary['Week'], weekly_summary['Started']):
     if y > 0:
-        plt.text(x, y + 0.5, f'{y}', ha='center', fontsize=9)
+        plt.text(x, y + 0.5, f'{y}', ha='center', fontsize=9, color='gray')
+for x, y in zip(weekly_summary['Week'], weekly_summary['Completed']):
+    if y > 0:
+        plt.text(x, y + 0.5, f'{y}', ha='center', fontsize=9, color='navy')
 
-# Final styling
-plt.title('PI 25.1 Weekly Story Point Completion — Started in PI Only')
+# Formatting
+plt.title('PI 25.1 Tasks Progression')
 plt.xlabel('Week')
 plt.ylabel('Story Points')
 plt.grid(True, linestyle='--', alpha=0.6)
-plt.xticks(weekly_progression['Week'])  # Show every week
+plt.xticks(weekly_summary['Week'])
 plt.legend()
 plt.tight_layout()
 plt.show()
