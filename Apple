@@ -1,0 +1,64 @@
+# Filter to tasks started in PI 25.1
+pi_start = pd.to_datetime('2025-01-01')
+pi_end = pd.to_datetime('2025-03-31')
+
+pi_tasks = df[
+    df['First_In_Progress'].notna() &
+    (df['First_In_Progress'] >= pi_start) &
+    (df['First_In_Progress'] <= pi_end)
+]
+
+# Define SP groupings
+def sp_group(sp):
+    if pd.isna(sp):
+        return 'Missing'
+    elif sp <= 1:
+        return '1'
+    elif sp == 2:
+        return '2'
+    elif sp == 3:
+        return '3'
+    elif sp == 4:
+        return '4'
+    else:
+        return '5+'
+
+pi_tasks['SP Group'] = pi_tasks['Story Points'].apply(sp_group)
+
+# Count started and completed
+started_grouped = pi_tasks.groupby('SP Group').size().reset_index(name='Started')
+completed_grouped = pi_tasks[pi_tasks['Done'].notna()].groupby('SP Group').size().reset_index(name='Completed')
+
+# Merge
+sp_summary = pd.merge(started_grouped, completed_grouped, on='SP Group', how='outer').fillna(0)
+sp_summary[['Started', 'Completed']] = sp_summary[['Started', 'Completed']].astype(int)
+
+# Order groups
+sp_order = ['1', '2', '3', '4', '5+', 'Missing']
+sp_summary['SP Group'] = pd.Categorical(sp_summary['SP Group'], categories=sp_order, ordered=True)
+sp_summary = sp_summary.sort_values('SP Group')
+
+# Plot
+import matplotlib.pyplot as plt
+
+plt.figure(figsize=(8, 5))
+bar_width = 0.4
+x = range(len(sp_summary))
+
+plt.bar([i - bar_width/2 for i in x], sp_summary['Started'], width=bar_width, color='silver', label='Started')
+plt.bar([i + bar_width/2 for i in x], sp_summary['Completed'], width=bar_width, color='navy', label='Completed')
+
+# Labels
+for i, row in sp_summary.iterrows():
+    plt.text(i - bar_width/2, row['Started'] + 0.3, f"{row['Started']}", ha='center', fontsize=9)
+    plt.text(i + bar_width/2, row['Completed'] + 0.3, f"{row['Completed']}", ha='center', fontsize=9)
+
+# Final formatting
+plt.xticks(x, sp_summary['SP Group'])
+plt.xlabel('Story Point Size')
+plt.ylabel('Number of Tasks')
+plt.title('PI 25.1 Started vs Completed by Story Point Size')
+plt.legend()
+plt.grid(axis='y', linestyle='--', alpha=0.5)
+plt.tight_layout()
+plt.show()
